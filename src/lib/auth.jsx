@@ -45,7 +45,7 @@ export function AuthProvider({ children }) {
     }
     setMfa(estado)
     if (estado !== 'ok') { setSistemas([]); setGestor(false); return }
-    const [lista, g] = await Promise.all([supabase.rpc('central_meus_sistemas'), supabase.rpc('central_sou_gestor')])
+    const [lista, g] = await Promise.all([supabase.rpc('central_menu'), supabase.rpc('central_sou_gestor')])
     setErroSistemas(lista.error ? 'Não foi possível carregar seus sistemas. Verifique a internet e tente de novo.' : null)
     setSistemas(lista.data || [])
     setGestor(!!g.data)

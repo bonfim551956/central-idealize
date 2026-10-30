@@ -120,7 +120,7 @@ function Painel({ u, sistemas, aoMudar, aoFechar }) {
       </div>
       {msg && <Aviso tipo={msg.tipo}>{msg.texto}</Aviso>}
       {(!u.ativo || !u.liberado) && <Aviso>Esta pessoa está bloqueada (desativada ou desligada no RH) e não entra em nenhum sistema.</Aviso>}
-      {sistemas.filter((s) => s.tipo_acesso === 'login' && s.situacao !== 'oculto').map((s) => (
+      {sistemas.filter((s) => (s.tipo_acesso === 'login' || s.tipo_acesso === 'livre') && s.situacao !== 'oculto').map((s) => (
         <LinhaSistema key={s.chave} u={u} s={s} acesso={u.acessos.find((a) => a.sistema === s.chave)} aoMudar={aoMudar} />
       ))}
       {rh && (
@@ -160,6 +160,22 @@ function LinhaSistema({ u, s, acesso, aoMudar }) {
     await aoMudar()
   }
   const mudou = (conta.trim().toUpperCase() !== (acesso?.conta || '').toUpperCase())
+  if (s.tipo_acesso === 'livre') {
+    return (
+      <div className="flex flex-col gap-2 border-t border-linha pt-4">
+        <div className="flex items-center justify-between gap-2">
+          <b>{s.nome}</b>
+          {s.situacao === 'em_breve' && <span className="rounded-md bg-fundo px-2 py-0.5 text-xs font-semibold text-apagado">Em breve</span>}
+          {acesso && <span className="flex items-center gap-1 text-xs font-semibold text-ok"><Check className="h-3 w-3" aria-hidden />Liberado</span>}
+        </div>
+        <span className="text-xs text-apagado">Abre direto (sem login do Central). Se o sistema tiver login próprio, a pessoa usa o dela.</span>
+        {erro && <Aviso>{erro}</Aviso>}
+        {acesso
+          ? <Botao variante="perigo" carregando={estado === 'retirando'} onClick={retirar}>Retirar do menu</Botao>
+          : <Botao carregando={estado === 'salvando'} onClick={salvar}>Mostrar no menu</Botao>}
+      </div>
+    )
+  }
   return (
     <div className="flex flex-col gap-2 border-t border-linha pt-4">
       <div className="flex items-center justify-between gap-2">
@@ -215,13 +231,14 @@ function Convidar({ aoFechar, aoConvidar }) {
 function Sistemas({ sistemas, aoSalvar }) {
   return (
     <div className="grid gap-4 md:grid-cols-2">
+      <NovoSistema aoCriar={aoSalvar} />
       {sistemas.map((s) => <CartaoSistema key={s.chave} s={s} aoSalvar={aoSalvar} />)}
     </div>
   )
 }
 
 function CartaoSistema({ s, aoSalvar }) {
-  const [f, setF] = useState({ nome: s.nome, descricao: s.descricao || '', url: s.url || '', ordem: s.ordem, situacao: s.situacao })
+  const [f, setF] = useState({ nome: s.nome, descricao: s.descricao || '', url: s.url || '', ordem: s.ordem, situacao: s.situacao, abrir_em: s.abrir_em || 'central' })
   const [erro, setErro] = useState(null)
   const [ok, setOk] = useState(false)
   const [salvando, setSalvando] = useState(false)
@@ -229,8 +246,8 @@ function CartaoSistema({ s, aoSalvar }) {
     setErro(null); setOk(false)
     if (f.url && !/^https:\/\/\S+$/.test(f.url.trim())) { setErro('O endereço precisa começar com https://'); return }
     setSalvando(true)
-    const { error } = await supabase.rpc('central_salvar_sistema', {
-      p_chave: s.chave, p_nome: f.nome, p_descricao: f.descricao, p_url: f.url.replace(/\/+$/, ''), p_ordem: Number(f.ordem) || 0, p_situacao: f.situacao,
+    const { error } = await supabase.rpc('central_editar_sistema', {
+      p_chave: s.chave, p_nome: f.nome, p_descricao: f.descricao, p_url: f.url.trim().replace(/\/+$/, ''), p_ordem: Number(f.ordem) || 0, p_situacao: f.situacao, p_abrir_em: f.abrir_em,
     })
     setSalvando(false)
     if (error) { setErro(mensagemErro(error)); return }
@@ -252,7 +269,65 @@ function CartaoSistema({ s, aoSalvar }) {
           </select>
         </label>
       </div>
+      <label className="flex flex-col gap-1 text-sm font-semibold">Como abre
+        <select value={f.abrir_em} onChange={(e) => setF({ ...f, abrir_em: e.target.value })} className="h-12 rounded-lg border border-linha bg-superficie px-3 text-base font-normal">
+          <option value="central">Dentro do Central</option>
+          <option value="nova_aba">Em nova aba (para sites que não abrem dentro do Central)</option>
+        </select>
+      </label>
       <Botao carregando={salvando} onClick={salvar} className="self-end">Salvar</Botao>
+    </div>
+  )
+}
+
+const CORES = ['#0B6E71', '#2D5C88', '#7A4FA0', '#A3560F', '#1E7A3C', '#C2410C', '#B45309', '#4E6468']
+const ICONES_NOVO = [['app', 'Geral'], ['grafico', 'Gráfico'], ['trofeu', 'Troféu'], ['estrela', 'Estrela'], ['calendario', 'Calendário'], ['pessoas', 'Pessoas'], ['alvo', 'Alvo'], ['carrinho', 'Carrinho']]
+
+function NovoSistema({ aoCriar }) {
+  const [aberto, setAberto] = useState(false)
+  const [f, setF] = useState({ nome: '', descricao: '', url: '', cor: CORES[0], icone: 'app' })
+  const [erro, setErro] = useState(null)
+  const [salvando, setSalvando] = useState(false)
+  const chave = f.nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 30)
+  const criar = async () => {
+    setErro(null)
+    if (chave.length < 2) { setErro('Informe o nome do sistema.'); return }
+    if (f.url && !/^https:\/\/\S+$/.test(f.url.trim())) { setErro('O endereço precisa começar com https://'); return }
+    setSalvando(true)
+    const { error } = await supabase.rpc('central_novo_sistema', {
+      p_chave: chave, p_nome: f.nome, p_descricao: f.descricao, p_url: f.url.trim().replace(/\/+$/, ''), p_cor: f.cor, p_icone: f.icone, p_tipo: 'livre', p_ordem: 99,
+    })
+    setSalvando(false)
+    if (error) { setErro(mensagemErro(error)); return }
+    setAberto(false); setF({ nome: '', descricao: '', url: '', cor: CORES[0], icone: 'app' }); await aoCriar()
+  }
+  if (!aberto) return <Botao variante="secundario" onClick={() => setAberto(true)} className="justify-self-start md:col-span-2"><Plus className="h-4 w-4" aria-hidden />Novo sistema</Botao>
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-marca bg-superficie p-6 md:col-span-2">
+      <b>Novo sistema no menu</b>
+      <p className="text-sm text-apagado">Sistemas novos abrem direto, sem o login do Central (se tiverem login próprio, a pessoa usa o dela). Depois de criar, libere para as pessoas na aba Pessoas.</p>
+      {erro && <Aviso>{erro}</Aviso>}
+      <div className="grid gap-3 md:grid-cols-2">
+        <Campo id="novo-nome" rotulo="Nome no menu" value={f.nome} onChange={(e) => setF({ ...f, nome: e.target.value })} />
+        <Campo id="novo-url" rotulo="Endereço" placeholder="https://" dica="Sem endereço, fica como “Em breve”" value={f.url} onChange={(e) => setF({ ...f, url: e.target.value })} />
+        <Campo id="novo-desc" rotulo="Descrição" value={f.descricao} onChange={(e) => setF({ ...f, descricao: e.target.value })} />
+        <label className="flex flex-col gap-1 text-sm font-semibold">Ícone
+          <select value={f.icone} onChange={(e) => setF({ ...f, icone: e.target.value })} className="h-12 rounded-lg border border-linha bg-superficie px-3 text-base font-normal">
+            {ICONES_NOVO.map(([k, n]) => <option key={k} value={k}>{n}</option>)}
+          </select>
+        </label>
+      </div>
+      <div className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label="Cor">
+        <span className="text-sm font-semibold">Cor</span>
+        {CORES.map((c) => (
+          <button key={c} type="button" role="radio" aria-checked={f.cor === c} aria-label={c} onClick={() => setF({ ...f, cor: c })}
+            className={cx('h-8 w-8 rounded-lg', f.cor === c && 'ring-2 ring-tinta ring-offset-2')} style={{ background: c }} />
+        ))}
+      </div>
+      <div className="flex justify-end gap-2">
+        <Botao variante="secundario" onClick={() => setAberto(false)}>Cancelar</Botao>
+        <Botao carregando={salvando} onClick={criar}>Criar</Botao>
+      </div>
     </div>
   )
 }

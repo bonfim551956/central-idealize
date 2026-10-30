@@ -2,13 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, NavLink, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom'
 import {
   BarChart3, CalendarDays, ChevronsLeft, ChevronsRight, ExternalLink, KeyRound, LayoutGrid, LogOut, Menu,
-  ShoppingCart, Target, Users, X,
+  ShoppingCart, Star, Target, Trophy, Users, X,
 } from 'lucide-react'
 import { useAuth, aoSair } from './lib/auth'
 import { Acessos } from './pages/Acessos'
 import { cx } from './ui'
 
-const ICONES = { carrinho: ShoppingCart, grafico: BarChart3, pessoas: Users, alvo: Target, calendario: CalendarDays, app: LayoutGrid }
+const ICONES = { carrinho: ShoppingCart, grafico: BarChart3, pessoas: Users, alvo: Target, calendario: CalendarDays, trofeu: Trophy, estrela: Star, app: LayoutGrid }
 const origemDe = (url) => { try { return new URL(url).origin } catch { return null } }
 const iniciais = (n) => (n || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join('').toUpperCase()
 const primeiroNome = (n) => { const p = (n || '').split(/\s+/)[0] || ''; return p.charAt(0) + p.slice(1).toLowerCase() }
@@ -20,7 +20,7 @@ export function Shell() {
   const [recolhido, setRecolhido] = useState(lerRecolhido)
   const [gaveta, setGaveta] = useState(false) // menu no celular
   const local = useLocation()
-  const abriveis = sistemas.filter((s) => s.situacao === 'ativo' && s.url)
+  const abriveis = sistemas.filter((s) => s.situacao === 'ativo' && s.url && s.abrir_em !== 'nova_aba')
   const atual = local.pathname.startsWith('/s/') ? decodeURIComponent(local.pathname.slice(3)) : null
 
   // sistemas já abertos continuam carregados (trocar de sistema não perde o que estava na tela)
@@ -85,6 +85,14 @@ export function Shell() {
           </>
         )
         const base = 'flex h-12 items-center gap-3 rounded-lg px-3 text-base font-semibold transition-colors'
+        if (!desabilitado && s.abrir_em === 'nova_aba') {
+          return (
+            <a key={s.chave} href={s.url} target="_blank" rel="noopener noreferrer" title={`${s.nome} (abre em nova aba)`} className={cx(base, 'text-[#D6E6E7] hover:bg-marca-media')}>
+              {conteudo}
+              <ExternalLink className={cx('h-4 w-4 shrink-0 text-[#8FB3B5]', recolhido && !gaveta && 'md:hidden')} aria-hidden />
+            </a>
+          )
+        }
         return desabilitado
           ? <span key={s.chave} title={`${s.nome} — em breve`} aria-disabled="true" className={cx(base, 'cursor-not-allowed text-[#D6E6E7]/50')}>{conteudo}</span>
           : (
@@ -162,7 +170,7 @@ export function Shell() {
           )
         })}
         <Routes>
-          <Route index element={<Inicio nome={nome} sistemas={abriveis} erro={erroSistemas} />} />
+          <Route index element={<Inicio nome={nome} sistemas={abriveis} externos={sistemas.filter((s) => s.situacao === 'ativo' && s.url && s.abrir_em === 'nova_aba')} erro={erroSistemas} />} />
           <Route path="s/:chave" element={<SistemaAberto sistemas={abriveis} />} />
           <Route path="acessos" element={gestor ? <div className="h-full overflow-y-auto"><Acessos /></div> : <Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -179,9 +187,9 @@ function SistemaAberto({ sistemas }) {
   return null
 }
 
-function Inicio({ nome, sistemas, erro }) {
+function Inicio({ nome, sistemas, externos, erro }) {
   const lista = useMemo(() => sistemas, [sistemas])
-  if (lista.length === 1 && !erro) return <Navigate to={`/s/${lista[0].chave}`} replace />
+  if (lista.length === 1 && externos.length === 0 && !erro) return <Navigate to={`/s/${lista[0].chave}`} replace />
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-5xl flex-col gap-6 p-6 md:p-12">
@@ -190,7 +198,7 @@ function Inicio({ nome, sistemas, erro }) {
           <p className="mt-1 text-apagado">Escolha o sistema. Você já está conectado em todos.</p>
         </div>
         {erro && <p role="alert" className="rounded-lg bg-perigo-suave px-3 py-2 text-sm text-perigo">{erro}</p>}
-        {!erro && lista.length === 0 && (
+        {!erro && lista.length === 0 && externos.length === 0 && (
           <div className="rounded-xl border border-linha bg-superficie p-6">
             <h2 className="text-xl font-bold">Nenhum sistema liberado ainda</h2>
             <p className="mt-1 text-apagado">Seu login está ativo, mas ainda não tem sistemas liberados. Fale com a diretoria.</p>
@@ -207,6 +215,21 @@ function Inicio({ nome, sistemas, erro }) {
                   {s.descricao && <span className="mt-1 block text-sm text-apagado">{s.descricao}</span>}
                 </span>
               </Link>
+            )
+          })}
+          {externos.map((s) => {
+            const Icone = ICONES[s.icone] || LayoutGrid
+            return (
+              <a key={s.chave} href={s.url} target="_blank" rel="noopener noreferrer" className="flex flex-col gap-4 rounded-xl border border-linha bg-superficie p-6 transition-shadow hover:shadow-lg">
+                <span className="flex items-start justify-between">
+                  <span className="grid h-12 w-12 place-items-center rounded-xl text-superficie" style={{ background: s.cor }}><Icone className="h-6 w-6" aria-hidden /></span>
+                  <ExternalLink className="h-4 w-4 text-apagado" aria-label="abre em nova aba" />
+                </span>
+                <span>
+                  <span className="block font-display text-xl font-bold">{s.nome}</span>
+                  {s.descricao && <span className="mt-1 block text-sm text-apagado">{s.descricao}</span>}
+                </span>
+              </a>
             )
           })}
         </div>
