@@ -43,7 +43,7 @@ export function Acessos() {
         <div role="tablist" aria-label="Gestão" className="flex gap-2">
           {[['pessoas', 'Pessoas'], ['sistemas', 'Sistemas']].map(([k, n]) => (
             <button key={k} type="button" role="tab" aria-selected={aba === k} onClick={() => setAba(k)}
-              className={cx('h-11 rounded-full px-4 text-sm font-semibold', aba === k ? 'bg-marca text-superficie' : 'border border-linha bg-superficie text-apagado hover:bg-fundo')}>{n}</button>
+              className={cx('h-11 rounded-full px-4 text-sm font-semibold', aba === k ? 'bg-marca text-claro' : 'border border-linha bg-superficie text-apagado hover:bg-fundo')}>{n}</button>
           ))}
         </div>
       </div>
@@ -62,7 +62,7 @@ export function Acessos() {
           <div className="grid items-start gap-4 lg:grid-cols-[1fr_380px]">
             <div className="overflow-x-auto rounded-xl border border-linha bg-superficie">
               <table className="w-full min-w-[560px] text-sm">
-                <thead className="bg-[#E9F0F0] text-left text-xs font-bold uppercase tracking-[0.06em] text-apagado">
+                <thead className="bg-marca-suave text-left text-xs font-bold uppercase tracking-[0.06em] text-apagado">
                   <tr><th className="px-4 py-3">Pessoa</th><th className="px-4 py-3">Sistemas</th><th className="px-4 py-3">Situação</th></tr>
                 </thead>
                 <tbody>
@@ -72,8 +72,8 @@ export function Acessos() {
                       <td className="px-4 py-3"><b>{u.nome}</b><br /><span className="text-xs text-apagado">{u.email}</span></td>
                       <td className="px-4 py-3">
                         <span className="flex flex-wrap gap-1">
-                          {u.perfis_rh.length > 0 && <span className="rounded-md bg-marca-suave px-2 py-0.5 text-xs font-bold text-marca">RH</span>}
-                          {u.acessos.map((a) => <span key={a.sistema} className="rounded-md bg-marca-suave px-2 py-0.5 text-xs font-bold text-marca">{nomeSistema(a.sistema)}</span>)}
+                          {u.perfis_rh.length > 0 && <span className="rounded-md bg-marca-suave px-2 py-0.5 text-xs font-bold text-marca-texto">RH</span>}
+                          {u.acessos.map((a) => <span key={a.sistema} className="rounded-md bg-marca-suave px-2 py-0.5 text-xs font-bold text-marca-texto">{nomeSistema(a.sistema)}</span>)}
                           {u.perfis_rh.length === 0 && u.acessos.length === 0 && <span className="text-xs text-apagado">Nenhum</span>}
                         </span>
                       </td>
@@ -129,7 +129,7 @@ function Painel({ u, sistemas, aoMudar, aoFechar }) {
           <span className="text-sm text-apagado">
             {u.perfis_rh.length ? u.perfis_rh.map((p) => `${p.perfil}${p.loja ? ` · ${p.loja}` : ''}`).join(', ') : 'Sem perfil no RH'}
           </span>
-          {rh.url && <a href={`${rh.url}/acessos`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-sm font-semibold text-marca hover:underline">Gerir perfis no RH <ExternalLink className="h-3 w-3" aria-hidden /></a>}
+          {rh.url && <a href={`${rh.url}/acessos`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-sm font-semibold text-marca-texto hover:underline">Gerir perfis no RH <ExternalLink className="h-3 w-3" aria-hidden /></a>}
         </div>
       )}
       {u.convite_pendente && u.ativo && (

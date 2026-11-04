@@ -2,11 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, NavLink, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom'
 import {
   BarChart3, CalendarDays, ChevronsLeft, ChevronsRight, ExternalLink, KeyRound, LayoutGrid, LogOut, Menu,
-  ShoppingCart, Star, Target, Trophy, Users, X,
+  ShoppingCart, Star, Target, Trophy, Users, X, Sun, Moon,
 } from 'lucide-react'
 import { useAuth, aoSair } from './lib/auth'
 import { Acessos } from './pages/Acessos'
 import { cx } from './ui'
+import { lerTema, aplicarTema } from './lib/tema'
 
 const ICONES = { carrinho: ShoppingCart, grafico: BarChart3, pessoas: Users, alvo: Target, calendario: CalendarDays, trofeu: Trophy, estrela: Star, app: LayoutGrid }
 const origemDe = (url) => { try { return new URL(url).origin } catch { return null } }
@@ -67,47 +68,50 @@ export function Shell() {
     }
   }), [abriveis])
 
+  const [tema, setTema] = useState(lerTema)
+  const trocarTema = (t) => { aplicarTema(t); setTema(t) }
+
   const alternar = () => setRecolhido((r) => { try { localStorage.setItem('central.menuRecolhido', r ? '0' : '1') } catch { /* ok */ } return !r })
   const largura = recolhido ? 'md:w-[72px]' : 'md:w-[264px]'
   const sistemaAtual = abriveis.find((s) => s.chave === atual)
 
   const menu = (
     <nav aria-label="Sistemas" className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
-      {(!recolhido || gaveta) && <span className="px-3 pb-1 text-xs font-bold uppercase tracking-[0.12em] text-[#8FB3B5]">Meus sistemas</span>}
+      {(!recolhido || gaveta) && <span className="px-3 pb-1 text-xs font-bold uppercase tracking-[0.12em] text-lat-suave">Meus sistemas</span>}
       {sistemas.map((s) => {
         const Icone = ICONES[s.icone] || LayoutGrid
         const desabilitado = s.situacao !== 'ativo' || !s.url
         const conteudo = (
           <>
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-superficie" style={{ background: s.cor }}><Icone className="h-5 w-5" aria-hidden /></span>
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-claro" style={{ background: s.cor }}><Icone className="h-5 w-5" aria-hidden /></span>
             <span className={cx('min-w-0 flex-1 truncate', recolhido && !gaveta && 'md:hidden')}>{s.nome}</span>
-            {desabilitado && <span className={cx('rounded-md bg-[#1D4F52] px-2 py-0.5 text-xs font-semibold text-[#B9CFD0]', recolhido && !gaveta && 'md:hidden')}>Em breve</span>}
+            {desabilitado && <span className={cx('rounded-md bg-lat-selo px-2 py-0.5 text-xs font-semibold text-lat-icone', recolhido && !gaveta && 'md:hidden')}>Em breve</span>}
           </>
         )
         const base = 'flex h-12 items-center gap-3 rounded-lg px-3 text-base font-semibold transition-colors'
         if (!desabilitado && s.abrir_em === 'nova_aba') {
           return (
-            <a key={s.chave} href={s.url} target="_blank" rel="noopener noreferrer" title={`${s.nome} (abre em nova aba)`} className={cx(base, 'text-[#D6E6E7] hover:bg-marca-media')}>
+            <a key={s.chave} href={s.url} target="_blank" rel="noopener noreferrer" title={`${s.nome} (abre em nova aba)`} className={cx(base, 'text-lat-texto hover:bg-lat-hover')}>
               {conteudo}
-              <ExternalLink className={cx('h-4 w-4 shrink-0 text-[#8FB3B5]', recolhido && !gaveta && 'md:hidden')} aria-hidden />
+              <ExternalLink className={cx('h-4 w-4 shrink-0 text-lat-suave', recolhido && !gaveta && 'md:hidden')} aria-hidden />
             </a>
           )
         }
         return desabilitado
-          ? <span key={s.chave} title={`${s.nome} — em breve`} aria-disabled="true" className={cx(base, 'cursor-not-allowed text-[#D6E6E7]/50')}>{conteudo}</span>
+          ? <span key={s.chave} title={`${s.nome} — em breve`} aria-disabled="true" className={cx(base, 'cursor-not-allowed text-lat-texto/50')}>{conteudo}</span>
           : (
             <NavLink key={s.chave} to={`/s/${s.chave}`} title={s.nome}
-              className={({ isActive }) => cx(base, isActive ? 'bg-superficie text-tinta' : 'text-[#D6E6E7] hover:bg-marca-media')}>
+              className={({ isActive }) => cx(base, isActive ? 'bg-lat-ativo text-lat-ativo-texto' : 'text-lat-texto hover:bg-lat-hover')}>
               {conteudo}
             </NavLink>
           )
       })}
       {gestor && (
         <>
-          <span className={cx('mt-4 px-3 pb-1 text-xs font-bold uppercase tracking-[0.12em] text-[#8FB3B5]', recolhido && !gaveta && 'md:hidden')}>Diretoria</span>
+          <span className={cx('mt-4 px-3 pb-1 text-xs font-bold uppercase tracking-[0.12em] text-lat-suave', recolhido && !gaveta && 'md:hidden')}>Diretoria</span>
           <NavLink to="/acessos" title="Gestão de acessos"
-            className={({ isActive }) => cx('flex h-12 items-center gap-3 rounded-lg px-3 text-base font-semibold transition-colors', isActive ? 'bg-superficie text-tinta' : 'text-[#D6E6E7] hover:bg-marca-media')}>
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-apagado text-superficie"><KeyRound className="h-5 w-5" aria-hidden /></span>
+            className={({ isActive }) => cx('flex h-12 items-center gap-3 rounded-lg px-3 text-base font-semibold transition-colors', isActive ? 'bg-lat-ativo text-lat-ativo-texto' : 'text-lat-texto hover:bg-lat-hover')}>
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#4E6468] text-claro"><KeyRound className="h-5 w-5" aria-hidden /></span>
             <span className={cx('truncate', recolhido && !gaveta && 'md:hidden')}>Gestão de acessos</span>
           </NavLink>
         </>
@@ -118,7 +122,7 @@ export function Shell() {
   return (
     <div className="flex h-full flex-col md:flex-row">
       {/* topo no celular */}
-      <header className="flex h-14 shrink-0 items-center justify-between bg-marca-funda px-4 text-superficie md:hidden">
+      <header className="flex h-14 shrink-0 items-center justify-between bg-marca-funda px-4 text-claro md:hidden">
         <button type="button" onClick={() => setGaveta(true)} aria-label="Abrir menu" className="grid h-11 w-11 place-items-center rounded-lg hover:bg-marca-media"><Menu className="h-6 w-6" /></button>
         <span className="font-display font-extrabold">{sistemaAtual?.nome || 'Central Idealize'}</span>
         <span className="w-11" />
@@ -126,34 +130,35 @@ export function Shell() {
 
       {gaveta && <div className="fixed inset-0 z-30 bg-[#0F0F0F]/50 md:hidden" onClick={() => setGaveta(false)} aria-hidden />}
       <aside
-        className={cx('fixed inset-y-0 left-0 z-40 flex w-[280px] flex-col gap-4 bg-marca-funda px-3 pb-4 pt-6 text-superficie transition-transform md:static md:z-auto md:translate-x-0',
+        className={cx('fixed inset-y-0 left-0 z-40 flex w-[280px] flex-col gap-4 bg-lat px-3 pb-4 pt-6 text-lat-texto border-r border-lat-linha transition-transform md:static md:z-auto md:translate-x-0',
           largura, gaveta ? 'translate-x-0' : '-translate-x-full')}
       >
         <div className="flex items-center justify-between gap-2 px-3">
           <Link to="/" className={cx('min-w-0', recolhido && !gaveta && 'md:hidden')}>
-            <img src="/logo-branca.png" alt="Óticas Idealize" className="h-7 w-auto" />
-            <span className="mt-1 block text-xs font-semibold uppercase tracking-[0.1em] text-[#8FB3B5]">Central Idealize</span>
+            <img src={tema === 'claro' ? '/logo.png' : '/logo-branca.png'} alt="Óticas Idealize" className="h-7 w-auto" />
+            <span className="mt-1 block text-xs font-semibold uppercase tracking-[0.1em] text-lat-suave">Central Idealize</span>
           </Link>
           <button type="button" onClick={alternar} aria-label={recolhido ? 'Abrir o menu' : 'Recolher o menu'} title={recolhido ? 'Abrir o menu' : 'Recolher o menu'}
-            className="hidden h-9 w-9 shrink-0 place-items-center rounded-lg text-[#B9CFD0] hover:bg-marca-media md:grid">
+            className="hidden h-9 w-9 shrink-0 place-items-center rounded-lg text-lat-icone hover:bg-lat-hover md:grid">
             {recolhido ? <ChevronsRight className="h-5 w-5" /> : <ChevronsLeft className="h-5 w-5" />}
           </button>
-          <button type="button" onClick={() => setGaveta(false)} aria-label="Fechar menu" className="grid h-11 w-11 place-items-center rounded-lg hover:bg-marca-media md:hidden"><X className="h-6 w-6" /></button>
+          <button type="button" onClick={() => setGaveta(false)} aria-label="Fechar menu" className="grid h-11 w-11 place-items-center rounded-lg hover:bg-lat-hover md:hidden"><X className="h-6 w-6" /></button>
         </div>
         {menu}
         {sistemaAtual && (!recolhido || gaveta) && (
-          <a href={sistemaAtual.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 text-sm text-[#B9CFD0] hover:text-superficie">
+          <a href={sistemaAtual.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 text-sm text-lat-icone hover:text-lat-forte">
             <ExternalLink className="h-4 w-4" aria-hidden /> Abrir {sistemaAtual.nome} em nova aba
           </a>
         )}
-        <div className="flex items-center gap-3 border-t border-[#1D4F52] px-2 pt-4">
+        <SeletorTema tema={tema} trocar={trocarTema} compacto={recolhido && !gaveta} />
+        <div className="flex items-center gap-3 border-t border-lat-linha px-2 pt-4">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-laranja font-bold text-marca-funda" title={nome}>{iniciais(nome)}</span>
           <div className={cx('min-w-0 flex-1', recolhido && !gaveta && 'md:hidden')}>
             <p className="truncate text-sm font-bold">{nome}</p>
-            <p className="truncate text-xs text-[#8FB3B5]">{sessao?.user?.email}</p>
+            <p className="truncate text-xs text-lat-suave">{sessao?.user?.email}</p>
           </div>
           <button type="button" onClick={sair} aria-label="Sair de todos os sistemas" title="Sair de todos os sistemas"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-[#B9CFD0] hover:bg-marca-media hover:text-superficie">
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-lat-icone hover:bg-lat-hover hover:text-lat-forte">
             <LogOut className="h-5 w-5" />
           </button>
         </div>
@@ -176,6 +181,32 @@ export function Shell() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+    </div>
+  )
+}
+
+// Claro / Escuro na barra lateral (recolhida: um botão só, que alterna)
+function SeletorTema({ tema, trocar, compacto }) {
+  const opcoes = [{ id: 'claro', rotulo: 'Claro', Icone: Sun }, { id: 'escuro', rotulo: 'Escuro', Icone: Moon }]
+  if (compacto) {
+    const proximo = tema === 'escuro' ? 'claro' : 'escuro'
+    const Icone = tema === 'escuro' ? Moon : Sun
+    return (
+      <button type="button" onClick={() => trocar(proximo)} aria-label={`Usar tema ${proximo}`} title={`Usar tema ${proximo}`}
+        className="mx-auto grid h-10 w-10 place-items-center rounded-lg text-lat-icone hover:bg-lat-hover hover:text-lat-forte">
+        <Icone className="h-5 w-5" aria-hidden />
+      </button>
+    )
+  }
+  return (
+    <div role="radiogroup" aria-label="Tema" className="mx-2 grid grid-cols-2 gap-1 rounded-lg border border-lat-linha p-1">
+      {opcoes.map(({ id, rotulo, Icone }) => (
+        <button key={id} type="button" role="radio" aria-checked={tema === id} onClick={() => trocar(id)}
+          className={cx('flex h-9 items-center justify-center gap-2 rounded-md text-sm font-semibold transition-colors',
+            tema === id ? 'bg-lat-ativo text-lat-ativo-texto' : 'text-lat-icone hover:bg-lat-hover hover:text-lat-forte')}>
+          <Icone className="h-4 w-4" aria-hidden /> {rotulo}
+        </button>
+      ))}
     </div>
   )
 }
@@ -209,7 +240,7 @@ function Inicio({ nome, sistemas, externos, erro }) {
             const Icone = ICONES[s.icone] || LayoutGrid
             return (
               <Link key={s.chave} to={`/s/${s.chave}`} className="flex flex-col gap-4 rounded-xl border border-linha bg-superficie p-6 transition-shadow hover:shadow-lg">
-                <span className="grid h-12 w-12 place-items-center rounded-xl text-superficie" style={{ background: s.cor }}><Icone className="h-6 w-6" aria-hidden /></span>
+                <span className="grid h-12 w-12 place-items-center rounded-xl text-claro" style={{ background: s.cor }}><Icone className="h-6 w-6" aria-hidden /></span>
                 <span>
                   <span className="block font-display text-xl font-bold">{s.nome}</span>
                   {s.descricao && <span className="mt-1 block text-sm text-apagado">{s.descricao}</span>}
@@ -222,7 +253,7 @@ function Inicio({ nome, sistemas, externos, erro }) {
             return (
               <a key={s.chave} href={s.url} target="_blank" rel="noopener noreferrer" className="flex flex-col gap-4 rounded-xl border border-linha bg-superficie p-6 transition-shadow hover:shadow-lg">
                 <span className="flex items-start justify-between">
-                  <span className="grid h-12 w-12 place-items-center rounded-xl text-superficie" style={{ background: s.cor }}><Icone className="h-6 w-6" aria-hidden /></span>
+                  <span className="grid h-12 w-12 place-items-center rounded-xl text-claro" style={{ background: s.cor }}><Icone className="h-6 w-6" aria-hidden /></span>
                   <ExternalLink className="h-4 w-4 text-apagado" aria-label="abre em nova aba" />
                 </span>
                 <span>

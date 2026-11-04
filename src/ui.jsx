@@ -4,10 +4,10 @@ export const cx = (...c) => c.filter(Boolean).join(' ')
 
 export function Botao({ variante = 'primario', carregando, className, children, ...p }) {
   const estilos = {
-    primario: 'bg-marca text-superficie hover:bg-marca-escura',
+    primario: 'bg-marca text-claro hover:bg-marca-escura',
     secundario: 'border border-linha bg-superficie text-tinta hover:bg-fundo',
     perigo: 'border border-perigo/30 bg-superficie text-perigo hover:bg-perigo-suave',
-    fantasma: 'text-marca hover:bg-marca-suave',
+    fantasma: 'text-marca-texto hover:bg-marca-suave',
   }
   return (
     <button
@@ -39,14 +39,14 @@ export function Campo({ rotulo, dica, erro, id, ...p }) {
 }
 
 export function Aviso({ tipo = 'erro', children }) {
-  const estilos = { erro: 'bg-perigo-suave text-perigo', ok: 'bg-marca-suave text-marca', info: 'bg-fundo text-apagado' }
+  const estilos = { erro: 'bg-perigo-suave text-perigo', ok: 'bg-marca-suave text-marca-texto', info: 'bg-fundo text-apagado' }
   return <p role={tipo === 'erro' ? 'alert' : 'status'} className={cx('rounded-lg px-3 py-2 text-sm', estilos[tipo])}>{children}</p>
 }
 
 export function Carregando({ texto = 'Carregando…' }) {
   return (
     <div className="grid h-full min-h-[50vh] place-items-center" role="status">
-      <span className="flex items-center gap-2 text-apagado"><Loader2 className="h-5 w-5 animate-spin text-marca" aria-hidden />{texto}</span>
+      <span className="flex items-center gap-2 text-apagado"><Loader2 className="h-5 w-5 animate-spin text-marca-texto" aria-hidden />{texto}</span>
     </div>
   )
 }

@@ -14,10 +14,52 @@
   --color-linha: #D2DEDF;
   --color-fundo: #F2F6F6;
   --color-superficie: #FAFAFA;
+  --color-claro: #FAFAFA;
+  --color-marca-texto: #0B6E71;
+  /* barra lateral */
+  --color-lat: #062A2C;
+  --color-lat-texto: #D6E6E7;
+  --color-lat-suave: #8FB3B5;
+  --color-lat-icone: #B9CFD0;
+  --color-lat-forte: #FAFAFA;
+  --color-lat-hover: #0A3F42;
+  --color-lat-linha: #1D4F52;
+  --color-lat-selo: #1D4F52;
+  --color-lat-ativo: #FAFAFA;
+  --color-lat-ativo-texto: #16272B;
   --color-perigo: #B42318;
   --color-perigo-suave: #FEECEB;
   --color-ok: #1E7A3C;
   --color-aviso: #A3560F;
+}
+
+/* Tema claro: barra lateral clara */
+:root[data-tema="claro"] {
+  --color-lat: #FAFAFA;
+  --color-lat-texto: #16272B;
+  --color-lat-suave: #4E6468;
+  --color-lat-icone: #4E6468;
+  --color-lat-forte: #0B6E71;
+  --color-lat-hover: #E1F2F2;
+  --color-lat-linha: #D2DEDF;
+  --color-lat-selo: #E1F2F2;
+  --color-lat-ativo: #0B6E71;
+  --color-lat-ativo-texto: #FAFAFA;
+}
+/* Tema escuro: telas do Central escuras (a barra lateral já é escura) */
+:root[data-tema="escuro"] {
+  color-scheme: dark;
+  --color-tinta: #E6EEEE;
+  --color-apagado: #9DB3B5;
+  --color-linha: #2A3D3F;
+  --color-fundo: #0F1A1B;
+  --color-superficie: #16272B;
+  --color-marca-suave: #123A3C;
+  --color-marca-texto: #5CC8CC;
+  --color-perigo: #F97066;
+  --color-perigo-suave: #3B1D1B;
+  --color-ok: #4ADE80;
+  --color-aviso: #F5A35C;
 }
 
 html, body, #root { height: 100%; }

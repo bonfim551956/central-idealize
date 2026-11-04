@@ -11,7 +11,7 @@ const NOMES = ['PDV', 'Sistema ADM', 'Idealize RH', 'Plataforma 360', 'Agendamen
 function Moldura({ children }) {
   return (
     <div className="grid min-h-full md:grid-cols-2">
-      <div className="relative hidden flex-col justify-between overflow-hidden bg-gradient-to-br from-marca to-marca-funda p-12 text-superficie md:flex">
+      <div className="relative hidden flex-col justify-between overflow-hidden bg-gradient-to-br from-marca to-marca-funda p-12 text-claro md:flex">
         <img src="/logo-branca.png" alt="Óticas Idealize" className="h-10 w-auto self-start" />
         <div className="flex flex-col gap-4">
           <h1 className="text-5xl font-extrabold">Um acesso.<br />Todos os sistemas.</h1>
@@ -60,7 +60,7 @@ export function Login() {
         <Campo id="email" rotulo="E-mail" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
         <Campo id="senha" rotulo="Senha" type="password" autoComplete="current-password" value={senha} onChange={(e) => setSenha(e.target.value)} />
         <div className="flex justify-end">
-          <Link to="/recuperar-senha" className="text-sm font-semibold text-marca hover:underline">Esqueci minha senha</Link>
+          <Link to="/recuperar-senha" className="text-sm font-semibold text-marca-texto hover:underline">Esqueci minha senha</Link>
         </div>
         <Botao type="submit" carregando={enviando} className="h-12 text-base">Entrar</Botao>
         <p className="text-xs text-apagado">A diretoria confirma com o código do autenticador. A sessão encerra após 20 minutos sem uso.</p>
@@ -98,7 +98,7 @@ export function RecuperarSenha() {
               <Botao type="submit" carregando={estado === 'enviando'} className="h-12 text-base">Enviar link</Botao>
             </>
           )}
-        <Link to="/login" className="text-sm font-semibold text-marca hover:underline">Voltar para o login</Link>
+        <Link to="/login" className="text-sm font-semibold text-marca-texto hover:underline">Voltar para o login</Link>
       </form>
     </Moldura>
   )
@@ -135,7 +135,7 @@ export function DefinirSenha() {
         <Campo id="senha" rotulo="Nova senha" type="password" autoComplete="new-password" dica="Pelo menos 10 caracteres, com letras e números" value={senha} onChange={(e) => setSenha(e.target.value)} />
         <Campo id="confirma" rotulo="Repita a senha" type="password" autoComplete="new-password" value={confirma} onChange={(e) => setConfirma(e.target.value)} />
         <Botao type="submit" carregando={enviando} disabled={!sessao} className="h-12 text-base">Salvar e entrar</Botao>
-        <Link to="/recuperar-senha" className="text-sm font-semibold text-marca hover:underline">Pedir um link novo</Link>
+        <Link to="/recuperar-senha" className="text-sm font-semibold text-marca-texto hover:underline">Pedir um link novo</Link>
       </form>
     </Moldura>
   )
@@ -187,7 +187,7 @@ export function Verificacao() {
     <Moldura>
       <form onSubmit={confirmar} className="flex flex-col gap-6" noValidate>
         <div className="flex items-start gap-3">
-          <ShieldCheck className="mt-1 h-7 w-7 shrink-0 text-marca" aria-hidden />
+          <ShieldCheck className="mt-1 h-7 w-7 shrink-0 text-marca-texto" aria-hidden />
           <div>
             <h2 className="text-3xl font-bold">Verificação em duas etapas</h2>
             <p className="mt-1 text-sm text-apagado">
