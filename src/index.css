@@ -33,7 +33,7 @@
   --color-aviso: #A3560F;
 }
 
-/* Tema claro: barra lateral clara */
+/* Tema da barra lateral: só ela muda; as telas e os sistemas continuam iguais */
 :root[data-tema="claro"] {
   --color-lat: #FAFAFA;
   --color-lat-texto: #16272B;
@@ -46,22 +46,6 @@
   --color-lat-ativo: #0B6E71;
   --color-lat-ativo-texto: #FAFAFA;
 }
-/* Tema escuro: telas do Central escuras (a barra lateral já é escura) */
-:root[data-tema="escuro"] {
-  color-scheme: dark;
-  --color-tinta: #E6EEEE;
-  --color-apagado: #9DB3B5;
-  --color-linha: #2A3D3F;
-  --color-fundo: #0F1A1B;
-  --color-superficie: #16272B;
-  --color-marca-suave: #123A3C;
-  --color-marca-texto: #5CC8CC;
-  --color-perigo: #F97066;
-  --color-perigo-suave: #3B1D1B;
-  --color-ok: #4ADE80;
-  --color-aviso: #F5A35C;
-}
-
 html, body, #root { height: 100%; }
 body { margin: 0; background: var(--color-fundo); color: var(--color-tinta); font-family: var(--font-sans); line-height: 1.5; }
 h1, h2, h3 { font-family: var(--font-display); line-height: 1.2; }
