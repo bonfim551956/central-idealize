@@ -4,15 +4,32 @@ import { supabase } from './supabase'
 const AuthCtx = createContext(null)
 export const useAuth = () => useContext(AuthCtx)
 
-const INATIVIDADE_MS = 20 * 60 * 1000 // encerra após 20 min sem uso
+// Regras de sessão vêm do banco (aba Segurança da Gestão de acessos): padrão 2FA para todos,
+// senha + código de novo a cada 7 dias e saída automática após 12 h sem uso.
+const PADRAO = { exige_2fa: true, dias: 7, horas: 12 }
 const CHAVE_ATIVIDADE = 'central.ultimaAtividade'
+const CHAVE_REGRAS = 'central.regras'
+const CHAVE_AVISO = 'central.aviso'
+const lerRegras = () => { try { return { ...PADRAO, ...JSON.parse(localStorage.getItem(CHAVE_REGRAS) || '{}') } } catch { return PADRAO } }
+const guardarRegras = (r) => { try { localStorage.setItem(CHAVE_REGRAS, JSON.stringify(r)) } catch { /* indisponível */ } }
 const gravarAtividade = (t) => { try { localStorage.setItem(CHAVE_ATIVIDADE, String(t)) } catch { /* indisponível */ } }
 const limparAtividade = () => { try { localStorage.removeItem(CHAVE_ATIVIDADE) } catch { /* indisponível */ } }
-const inativoDemais = () => {
+const inativoDemais = (horas) => {
   try {
     const t = Number(localStorage.getItem(CHAVE_ATIVIDADE))
-    return Number.isFinite(t) && t > 0 && Date.now() - t > INATIVIDADE_MS
+    return Number.isFinite(t) && t > 0 && Date.now() - t > horas * 3600000
   } catch { return false }
+}
+// aviso mostrado na tela de login depois de uma saída automática
+export const lerAviso = () => { try { const a = sessionStorage.getItem(CHAVE_AVISO); sessionStorage.removeItem(CHAVE_AVISO); return a } catch { return null } }
+const guardarAviso = (a) => { try { sessionStorage.setItem(CHAVE_AVISO, a) } catch { /* indisponível */ } }
+// quando o código do autenticador foi confirmado nesta sessão (claim "amr" do token)
+function codigoConfirmadoEm(token) {
+  try {
+    const p = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+    const ts = (p.amr || []).filter((m) => m.method === 'totp').map((m) => Number(m.timestamp)).filter(Number.isFinite)
+    return ts.length ? Math.max(...ts) * 1000 : null
+  } catch { return null }
 }
 
 // Quem quiser saber que a sessão vai acabar (para avisar os sistemas abertos)
@@ -27,21 +44,33 @@ export function AuthProvider({ children }) {
   const [sistemas, setSistemas] = useState([])
   const [gestor, setGestor] = useState(false)
   const [erroSistemas, setErroSistemas] = useState(null)
+  const regras = useRef(lerRegras())
 
   const carregarContexto = useCallback(async (s) => {
     if (!s) { setNome(''); setMfa('ok'); setSistemas([]); setGestor(false); return }
-    const [perfil, aal, fatores] = await Promise.all([
+    const [perfil, aal, fatores, r] = await Promise.all([
       supabase.from('usuarios').select('nome, mfa_obrigatorio').eq('id', s.user.id).maybeSingle(),
       supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
       supabase.auth.mfa.listFactors(),
+      supabase.rpc('central_regras_sessao'),
     ])
+    if (r.data) { regras.current = { ...PADRAO, ...r.data }; guardarRegras(regras.current) }
     setNome(perfil.data?.nome || s.user.email || '')
     const verificados = (fatores.data?.totp || []).filter((f) => f.status === 'verified')
-    const obrigatorio = perfil.data?.mfa_obrigatorio ?? true
+    const obrigatorio = regras.current.exige_2fa || (perfil.data?.mfa_obrigatorio ?? true)
     let estado = 'ok'
     if (obrigatorio) {
-      if (aal.data?.currentLevel === 'aal1' && aal.data?.nextLevel === 'aal2') estado = 'verificar'
-      else if (verificados.length === 0) estado = 'cadastrar'
+      if (verificados.length === 0) estado = 'cadastrar'
+      else if (aal.data?.currentLevel !== 'aal2') estado = 'verificar'
+      else {
+        // a cada N dias pede senha + código de novo, mesmo sem ter saído (também conferido no banco)
+        const em = codigoConfirmadoEm(s.access_token)
+        if (em && Date.now() - em > regras.current.dias * 86400000) {
+          guardarAviso(`Por segurança, a cada ${regras.current.dias} dias o Central pede a senha e o código de novo.`)
+          await supabase.auth.signOut({ scope: 'local' })
+          return
+        }
+      }
     }
     setMfa(estado)
     if (estado !== 'ok') { setSistemas([]); setGestor(false); return }
@@ -55,7 +84,8 @@ export function AuthProvider({ children }) {
     let vivo = true
     supabase.auth.getSession().then(async ({ data }) => {
       if (!vivo) return
-      if (data.session && inativoDemais()) {
+      if (data.session && inativoDemais(regras.current.horas)) {
+        guardarAviso(`O Central ficou mais de ${regras.current.horas} h sem uso. Entre de novo.`)
         await supabase.auth.signOut({ scope: 'local' })
         limparAtividade()
         setSessao(null); await carregarContexto(null); setCarregando(false)
@@ -87,7 +117,9 @@ export function AuthProvider({ children }) {
     if (!sessao) return
     let ultima = 0
     const marcar = () => { const t = Date.now(); if (t - ultima > 15000) { ultima = t; gravarAtividade(t) } }
-    const verificar = () => { if (inativoDemais()) sair() }
+    const verificar = () => {
+      if (inativoDemais(regras.current.horas)) { guardarAviso(`O Central ficou mais de ${regras.current.horas} h sem uso. Entre de novo.`); sair() }
+    }
     const eventos = ['mousedown', 'keydown', 'touchstart', 'scroll']
     eventos.forEach((e) => window.addEventListener(e, marcar, { passive: true }))
     // atividade dentro dos sistemas abertos chega como aviso do próprio sistema

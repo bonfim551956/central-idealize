@@ -41,14 +41,14 @@ export function Acessos() {
           <p className="mt-1 text-apagado">Quem entra em qual sistema. O desligamento no RH retira todos os acessos.</p>
         </div>
         <div role="tablist" aria-label="Gestão" className="flex gap-2">
-          {[['pessoas', 'Pessoas'], ['sistemas', 'Sistemas']].map(([k, n]) => (
+          {[['pessoas', 'Pessoas'], ['sistemas', 'Sistemas'], ['seguranca', 'Segurança']].map(([k, n]) => (
             <button key={k} type="button" role="tab" aria-selected={aba === k} onClick={() => setAba(k)}
               className={cx('h-11 rounded-full px-4 text-sm font-semibold', aba === k ? 'bg-marca text-claro' : 'border border-linha bg-superficie text-apagado hover:bg-fundo')}>{n}</button>
           ))}
         </div>
       </div>
 
-      {aba === 'sistemas' ? <Sistemas sistemas={dados.sistemas} aoSalvar={async () => { await carregar(); await recarregar() }} /> : (
+      {aba === 'seguranca' ? <Seguranca /> : aba === 'sistemas' ? <Sistemas sistemas={dados.sistemas} aoSalvar={async () => { await carregar(); await recarregar() }} /> : (
         <>
           <div className="flex flex-wrap items-center gap-2">
             <label className="relative min-w-0 flex-1">
@@ -328,6 +328,91 @@ function NovoSistema({ aoCriar }) {
         <Botao variante="secundario" onClick={() => setAberto(false)}>Cancelar</Botao>
         <Botao carregando={salvando} onClick={criar}>Criar</Botao>
       </div>
+    </div>
+  )
+}
+
+// Aba Segurança: verificação em duas etapas e tempo de sessão do Central (mesmas regras do painel de IA)
+const DIAS = [1, 3, 7, 15, 30]
+const HORAS = [1, 2, 4, 8, 12, 24]
+function Seguranca() {
+  const [d, setD] = useState(null)
+  const [f, setF] = useState(null)
+  const [erro, setErro] = useState(null)
+  const [ok, setOk] = useState(null)
+  const [salvando, setSalvando] = useState(false)
+  const [trocando, setTrocando] = useState(null)
+  const carregar = useCallback(async () => {
+    const { data, error } = await supabase.rpc('central_seguranca')
+    if (error) { setErro(mensagemErro(error)); return }
+    setD(data); setF({ obrigatorio: data.obrigatorio, dias: data.dias, horas: data.horas })
+  }, [])
+  useEffect(() => { carregar() }, [carregar])
+  if (erro && !d) return <Aviso>{erro}</Aviso>
+  if (!d || !f) return <Carregando />
+  const mudou = f.obrigatorio !== d.obrigatorio || f.dias !== d.dias || f.horas !== d.horas
+  const salvar = async () => {
+    setErro(null); setOk(null); setSalvando(true)
+    const { error } = await supabase.rpc('central_seguranca_salvar', { p_obrigatorio: f.obrigatorio, p_dias: f.dias, p_horas: f.horas })
+    setSalvando(false)
+    if (error) { setErro(mensagemErro(error)); return }
+    setOk('Regras salvas. Valem a partir do próximo acesso de cada pessoa.'); await carregar()
+  }
+  const trocar = async (p) => {
+    if (!window.confirm(`Apagar o autenticador de ${p.nome}? No próximo acesso, a pessoa vai ler um QR code novo.`)) return
+    setErro(null); setOk(null); setTrocando(p.id)
+    const { error } = await supabase.rpc('central_trocar_aparelho', { p_usuario: p.id })
+    setTrocando(null)
+    if (error) { setErro(mensagemErro(error)); return }
+    setOk(`Autenticador de ${p.nome} apagado. No próximo acesso ela cadastra o novo celular.`); await carregar()
+  }
+  const sel = 'h-11 rounded-lg border border-linha bg-superficie px-3 text-sm'
+  return (
+    <div className="flex flex-col gap-4">
+      {erro && <Aviso>{erro}</Aviso>}
+      {ok && <Aviso tipo="ok">{ok}</Aviso>}
+      <section className="flex flex-col gap-6 rounded-xl border border-linha bg-superficie p-6">
+        <h2 className="text-xl font-bold">Verificação em duas etapas</h2>
+        <label className="flex items-start justify-between gap-6">
+          <span><b className="block">Obrigatória para todos</b><span className="text-sm text-apagado">No primeiro acesso, a pessoa lê um QR code com o Google Authenticator ou Microsoft Authenticator. Depois, digita o código de 6 números ao entrar.</span></span>
+          <input type="checkbox" role="switch" className="mt-1 h-6 w-11 shrink-0 accent-marca" checked={f.obrigatorio} onChange={(e) => setF({ ...f, obrigatorio: e.target.checked })} />
+        </label>
+        {!f.obrigatorio && <Aviso tipo="info">Desligado, só pede o código quem estiver marcado no RH com verificação obrigatória.</Aviso>}
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <span><b className="block">Pedir senha e código de novo a cada</b><span className="text-sm text-apagado">No mesmo aparelho. Dentro desse prazo, a pessoa entra direto.</span></span>
+          <select aria-label="Dias" className={sel} value={f.dias} onChange={(e) => setF({ ...f, dias: Number(e.target.value) })}>
+            {[...new Set([...DIAS, d.dias])].sort((a, b) => a - b).map((n) => <option key={n} value={n}>{n} {n === 1 ? 'dia' : 'dias'}</option>)}
+          </select>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <span><b className="block">Sair sozinho depois de</b><span className="text-sm text-apagado">Sem uso nesse tempo, o Central e os sistemas abertos nele encerram a sessão. Em computador compartilhado da loja, prefira um tempo menor.</span></span>
+          <select aria-label="Horas sem uso" className={sel} value={f.horas} onChange={(e) => setF({ ...f, horas: Number(e.target.value) })}>
+            {[...new Set([...HORAS, d.horas])].sort((a, b) => a - b).map((n) => <option key={n} value={n}>{n} {n === 1 ? 'hora' : 'horas'} sem uso</option>)}
+          </select>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <span className="text-sm text-apagado">Toda alteração fica registrada com quem mudou e quando.</span>
+          <Botao onClick={salvar} carregando={salvando} disabled={!mudou}>Salvar</Botao>
+        </div>
+      </section>
+      <section className="flex flex-col gap-4 rounded-xl border border-linha bg-superficie p-6">
+        <h2 className="text-xl font-bold">Situação das pessoas</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="text-xs font-bold uppercase tracking-[0.06em] text-apagado"><tr><th className="py-2 pr-4">Pessoa</th><th className="py-2 pr-4">Verificação em duas etapas</th><th className="py-2" /></tr></thead>
+            <tbody>
+              {d.pessoas.map((p) => (
+                <tr key={p.id} className="border-t border-linha">
+                  <td className="py-3 pr-4"><b className="block">{p.nome}</b><span className="text-xs text-apagado">{p.email}</span></td>
+                  <td className="py-3 pr-4">{p.tem_2fa ? <span className="font-semibold text-ok">Ativa</span> : <span className="font-semibold text-aviso">Ainda não cadastrou (vai pedir no próximo acesso)</span>}</td>
+                  <td className="py-3 text-right">{p.tem_2fa && !p.eu && <Botao variante="fantasma" carregando={trocando === p.id} onClick={() => trocar(p)}>Trocar aparelho</Botao>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-sm text-apagado">"Trocar aparelho" serve para quem perdeu ou trocou o celular: apaga o cadastro antigo e a pessoa lê um QR code novo no próximo acesso.</p>
+      </section>
     </div>
   )
 }

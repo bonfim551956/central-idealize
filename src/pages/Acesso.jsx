@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { ShieldCheck } from 'lucide-react'
 import { supabase, mensagemErro } from '../lib/supabase'
-import { useAuth } from '../lib/auth'
+import { useAuth, lerAviso } from '../lib/auth'
 import { Aviso, Botao, Campo } from '../ui'
 
 const NOMES = ['PDV', 'Sistema ADM', 'Idealize RH', 'Plataforma 360', 'Agendamento']
@@ -37,6 +37,7 @@ export function Login() {
   const [senha, setSenha] = useState('')
   const [erro, setErro] = useState(null)
   const [enviando, setEnviando] = useState(false)
+  const [aviso] = useState(lerAviso)
   if (sessao) return <Navigate to={mfa === 'ok' ? '/' : '/verificacao'} replace />
 
   const entrar = async (e) => {
@@ -56,6 +57,7 @@ export function Login() {
           <h2 className="text-3xl font-bold">Entrar</h2>
           <p className="mt-1 text-sm text-apagado">Use o e-mail cadastrado pelo RH.</p>
         </div>
+        {aviso && !erro && <Aviso tipo="info">{aviso}</Aviso>}
         {erro && <Aviso>{erro}</Aviso>}
         <Campo id="email" rotulo="E-mail" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
         <Campo id="senha" rotulo="Senha" type="password" autoComplete="current-password" value={senha} onChange={(e) => setSenha(e.target.value)} />
@@ -63,7 +65,7 @@ export function Login() {
           <Link to="/recuperar-senha" className="text-sm font-semibold text-marca-texto hover:underline">Esqueci minha senha</Link>
         </div>
         <Botao type="submit" carregando={enviando} className="h-12 text-base">Entrar</Botao>
-        <p className="text-xs text-apagado">A diretoria confirma com o código do autenticador. A sessão encerra após 20 minutos sem uso.</p>
+        <p className="text-xs text-apagado">Depois da senha, confirme com o código do aplicativo autenticador.</p>
       </form>
     </Moldura>
   )
