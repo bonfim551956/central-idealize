@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Check, ExternalLink, Mail, Plus, Search, X } from 'lucide-react'
+import { Check, ExternalLink, Mail, Plus, Search, ShieldCheck, X } from 'lucide-react'
 import { supabase, chamarFuncao, mensagemErro } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { Aviso, Botao, Campo, Carregando, cx } from '../ui'
@@ -15,11 +15,13 @@ export function Acessos() {
   const [selId, setSelId] = useState(null)
   const [convidando, setConvidando] = useState(false)
 
+  const [seg, setSeg] = useState({}) // id -> { exigido, tem_2fa, eu } (verificação em duas etapas)
   const carregar = useCallback(async () => {
-    const { data, error } = await supabase.rpc('central_listar_acessos')
+    const [{ data, error }, s] = await Promise.all([supabase.rpc('central_listar_acessos'), supabase.rpc('central_seguranca')])
     if (error) { setErro(mensagemErro(error)); return }
     setErro(null)
     setDados(data)
+    if (s.data) setSeg(Object.fromEntries((s.data.pessoas || []).map((p) => [p.id, { ...p, todos: s.data.obrigatorio }])))
   }, [])
   useEffect(() => { carregar() }, [carregar])
 
@@ -83,12 +85,53 @@ export function Acessos() {
                 </tbody>
               </table>
             </div>
-            {sel ? <Painel u={sel} sistemas={dados.sistemas} aoMudar={carregar} aoFechar={() => setSelId(null)} />
+            {sel ? <Painel u={sel} seg={seg[sel.id]} sistemas={dados.sistemas} aoMudar={carregar} aoFechar={() => setSelId(null)} />
               : <div className="rounded-xl border border-dashed border-linha p-6 text-sm text-apagado">Escolha uma pessoa para liberar ou retirar sistemas.</div>}
           </div>
         </>
       )}
       {convidando && <Convidar aoFechar={() => setConvidando(false)} aoConvidar={async () => { setConvidando(false); await carregar() }} />}
+    </div>
+  )
+}
+
+// Verificação em duas etapas desta pessoa (a mesma marcação do Idealize RH: vale para o RH e para o Central)
+function DoisFatores({ u, seg, aoMudar }) {
+  const [salvando, setSalvando] = useState(false)
+  const [erro, setErro] = useState(null)
+  const exigir = async (v) => {
+    setErro(null); setSalvando(true)
+    const { error } = await supabase.rpc('definir_mfa_obrigatorio', { p_usuario: u.id, p_obrigatorio: v })
+    setSalvando(false)
+    if (error) { setErro(mensagemErro(error)); return }
+    await aoMudar()
+  }
+  const trocar = async () => {
+    if (!window.confirm(`Apagar o autenticador de ${u.nome}? No próximo acesso, a pessoa vai ler um QR code novo.`)) return
+    setErro(null); setSalvando(true)
+    const { error } = await supabase.rpc('central_trocar_aparelho', { p_usuario: u.id })
+    setSalvando(false)
+    if (error) { setErro(mensagemErro(error)); return }
+    await aoMudar()
+  }
+  const exigido = seg.todos || seg.exigido
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-linha bg-fundo p-4">
+      <span className="flex items-center gap-2 font-bold"><ShieldCheck className="h-4 w-4 text-marca-texto" aria-hidden />Verificação em duas etapas</span>
+      {erro && <Aviso>{erro}</Aviso>}
+      <label className={cx('flex items-center justify-between gap-4 text-sm', (seg.eu || seg.todos) && 'opacity-60')}>
+        <span>Exigir o código do aplicativo autenticador ao entrar</span>
+        <input type="checkbox" role="switch" className="h-5 w-5 shrink-0 accent-marca" checked={!!exigido} disabled={salvando || seg.eu || seg.todos}
+          onChange={(e) => exigir(e.target.checked)} />
+      </label>
+      {seg.todos && <span className="text-xs text-apagado">Ligado para todos na aba Segurança.</span>}
+      {seg.eu && !seg.todos && <span className="text-xs text-apagado">A sua própria exigência só outro gestor altera.</span>}
+      <span className="text-sm">
+        {seg.tem_2fa ? <span className="font-semibold text-ok">Autenticador cadastrado</span>
+          : exigido ? <span className="font-semibold text-aviso">Vai cadastrar no próximo acesso (lê um QR code)</span>
+          : <span className="text-apagado">Entra só com e-mail e senha</span>}
+      </span>
+      {seg.tem_2fa && !seg.eu && <Botao variante="fantasma" className="w-fit px-0" carregando={salvando} onClick={trocar}>Trocar aparelho (perdeu ou trocou o celular)</Botao>}
     </div>
   )
 }
@@ -99,7 +142,7 @@ function Situacao({ u }) {
   return <span className="font-semibold text-ok">Ativo</span>
 }
 
-function Painel({ u, sistemas, aoMudar, aoFechar }) {
+function Painel({ u, seg, sistemas, aoMudar, aoFechar }) {
   const [msg, setMsg] = useState(null)
   const [reenviando, setReenviando] = useState(false)
   const rh = sistemas.find((s) => s.tipo_acesso === 'rh')
@@ -119,6 +162,7 @@ function Painel({ u, sistemas, aoMudar, aoFechar }) {
         <button type="button" onClick={aoFechar} aria-label="Fechar" className="grid h-9 w-9 shrink-0 place-items-center rounded-lg hover:bg-fundo"><X className="h-5 w-5" /></button>
       </div>
       {msg && <Aviso tipo={msg.tipo}>{msg.texto}</Aviso>}
+      {seg && <DoisFatores u={u} seg={seg} aoMudar={aoMudar} />}
       {(!u.ativo || !u.liberado) && <Aviso>Esta pessoa está bloqueada (desativada ou desligada no RH) e não entra em nenhum sistema.</Aviso>}
       {sistemas.filter((s) => (s.tipo_acesso === 'login' || s.tipo_acesso === 'livre') && s.situacao !== 'oculto').map((s) => (
         <LinhaSistema key={s.chave} u={u} s={s} acesso={u.acessos.find((a) => a.sistema === s.chave)} aoMudar={aoMudar} />
