@@ -41,21 +41,25 @@ export function AuthProvider({ children }) {
   const [sessao, setSessao] = useState(null)
   const [nome, setNome] = useState('')
   const [mfa, setMfa] = useState('ok') // ok | verificar | cadastrar
+  const [trocarSenha, setTrocarSenha] = useState(false) // senha padrão: troca obrigatória no 1º acesso
   const [sistemas, setSistemas] = useState([])
   const [gestor, setGestor] = useState(false)
   const [erroSistemas, setErroSistemas] = useState(null)
   const regras = useRef(lerRegras())
 
   const carregarContexto = useCallback(async (s) => {
-    if (!s) { setNome(''); setMfa('ok'); setSistemas([]); setGestor(false); return }
+    if (!s) { setNome(''); setMfa('ok'); setTrocarSenha(false); setSistemas([]); setGestor(false); return }
     const [perfil, aal, fatores, r] = await Promise.all([
-      supabase.from('usuarios').select('nome, mfa_obrigatorio').eq('id', s.user.id).maybeSingle(),
+      supabase.from('usuarios').select('nome, mfa_obrigatorio, trocar_senha').eq('id', s.user.id).maybeSingle(),
       supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
       supabase.auth.mfa.listFactors(),
       supabase.rpc('central_regras_sessao'),
     ])
     if (r.data) { regras.current = { ...PADRAO, ...r.data }; guardarRegras(regras.current) }
     setNome(perfil.data?.nome || s.user.email || '')
+    // senha padrão: antes de tudo, a pessoa cria a própria senha
+    if (perfil.data?.trocar_senha) { setTrocarSenha(true); setSistemas([]); setGestor(false); return }
+    setTrocarSenha(false)
     const verificados = (fatores.data?.totp || []).filter((f) => f.status === 'verified')
     const obrigatorio = regras.current.exige_2fa || (perfil.data?.mfa_obrigatorio ?? true)
     let estado = 'ok'
@@ -137,9 +141,9 @@ export function AuthProvider({ children }) {
   }, [sessao, sair])
 
   const valor = useMemo(() => ({
-    carregando, sessao, nome, mfa, sistemas, gestor, erroSistemas, sair,
+    carregando, sessao, nome, mfa, trocarSenha, sistemas, gestor, erroSistemas, sair,
     recarregar: () => carregarContexto(sessao),
-  }), [carregando, sessao, nome, mfa, sistemas, gestor, erroSistemas, sair, carregarContexto])
+  }), [carregando, sessao, nome, mfa, trocarSenha, sistemas, gestor, erroSistemas, sair, carregarContexto])
 
   return <AuthCtx.Provider value={valor}>{children}</AuthCtx.Provider>
 }

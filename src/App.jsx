@@ -11,10 +11,11 @@ function guardarDestino(caminho) {
 }
 
 function Protegida() {
-  const { carregando, sessao, mfa } = useAuth()
+  const { carregando, sessao, mfa, trocarSenha } = useAuth()
   const local = useLocation()
   if (carregando) return <Carregando texto="Abrindo o Central…" />
   if (!sessao) { guardarDestino(local.pathname); return <Navigate to="/login" replace /> }
+  if (trocarSenha) return <Navigate to="/definir-senha" replace />
   if (mfa !== 'ok') return <Navigate to="/verificacao" replace />
   return <Shell />
 }

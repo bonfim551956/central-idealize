@@ -138,6 +138,7 @@ function DoisFatores({ u, seg, aoMudar }) {
 
 function Situacao({ u }) {
   if (!u.ativo || !u.liberado) return <span className="font-semibold text-perigo">Bloqueado</span>
+  if (u.trocar_senha) return <span className="font-semibold text-aviso">Senha inicial (troca no 1º acesso)</span>
   if (u.convite_pendente) return <span className="font-semibold text-aviso">Convite enviado</span>
   return <span className="font-semibold text-ok">Ativo</span>
 }

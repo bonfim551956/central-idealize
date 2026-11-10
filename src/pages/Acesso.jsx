@@ -32,13 +32,13 @@ function Moldura({ children }) {
 }
 
 export function Login() {
-  const { sessao, mfa } = useAuth()
+  const { sessao, mfa, trocarSenha } = useAuth()
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
   const [erro, setErro] = useState(null)
   const [enviando, setEnviando] = useState(false)
   const [aviso] = useState(lerAviso)
-  if (sessao) return <Navigate to={mfa === 'ok' ? '/' : '/verificacao'} replace />
+  if (sessao) return <Navigate to={trocarSenha ? '/definir-senha' : mfa === 'ok' ? '/' : '/verificacao'} replace />
 
   const entrar = async (e) => {
     e.preventDefault()
@@ -108,7 +108,7 @@ export function RecuperarSenha() {
 
 // Chega aqui pelo link do convite ou da recuperação (o link já abre a sessão)
 export function DefinirSenha() {
-  const { sessao, carregando } = useAuth()
+  const { sessao, carregando, trocarSenha, recarregar } = useAuth()
   const nav = useNavigate()
   const [senha, setSenha] = useState('')
   const [confirma, setConfirma] = useState('')
@@ -121,23 +121,28 @@ export function DefinirSenha() {
     if (senha !== confirma) { setErro('As senhas não conferem.'); return }
     setEnviando(true)
     const { error } = await supabase.auth.updateUser({ password: senha })
+    if (error) { setEnviando(false); setErro(/same|different/i.test(error.message) ? 'Escolha uma senha diferente da senha inicial.' : mensagemErro(error)); return }
+    if (trocarSenha) {
+      const { error: e2 } = await supabase.rpc('central_senha_trocada')
+      if (e2) { setEnviando(false); setErro(mensagemErro(e2)); return }
+      await recarregar()
+    }
     setEnviando(false)
-    if (error) { setErro(mensagemErro(error)); return }
     nav('/', { replace: true })
   }
   return (
     <Moldura>
       <form onSubmit={salvar} className="flex flex-col gap-6" noValidate>
         <div>
-          <h2 className="text-3xl font-bold">Criar senha</h2>
-          <p className="mt-1 text-sm text-apagado">Escolha a senha que você vai usar para entrar no Central.</p>
+          <h2 className="text-3xl font-bold">{trocarSenha ? 'Troque a senha inicial' : 'Criar senha'}</h2>
+          <p className="mt-1 text-sm text-apagado">{trocarSenha ? 'No primeiro acesso, crie a sua própria senha. A senha inicial deixa de valer.' : 'Escolha a senha que você vai usar para entrar no Central.'}</p>
         </div>
         {!carregando && !sessao && <Aviso>O link venceu ou já foi usado. Peça um novo em “Esqueci minha senha”.</Aviso>}
         {erro && <Aviso>{erro}</Aviso>}
         <Campo id="senha" rotulo="Nova senha" type="password" autoComplete="new-password" dica="Pelo menos 10 caracteres, com letras e números" value={senha} onChange={(e) => setSenha(e.target.value)} />
         <Campo id="confirma" rotulo="Repita a senha" type="password" autoComplete="new-password" value={confirma} onChange={(e) => setConfirma(e.target.value)} />
         <Botao type="submit" carregando={enviando} disabled={!sessao} className="h-12 text-base">Salvar e entrar</Botao>
-        <Link to="/recuperar-senha" className="text-sm font-semibold text-marca-texto hover:underline">Pedir um link novo</Link>
+        {!trocarSenha && <Link to="/recuperar-senha" className="text-sm font-semibold text-marca-texto hover:underline">Pedir um link novo</Link>}
       </form>
     </Moldura>
   )
