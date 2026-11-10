@@ -1,13 +1,20 @@
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useAuth } from './lib/auth'
 import { DefinirSenha, Login, RecuperarSenha, Verificacao } from './pages/Acesso'
 import { Shell } from './Shell'
 import { Carregando } from './ui'
 
+// Quem chega por um sistema (ex.: /s/pdv) e ainda não entrou volta para ele depois do login
+export const CHAVE_DESTINO = 'central.destino'
+function guardarDestino(caminho) {
+  try { if (caminho.startsWith('/s/')) sessionStorage.setItem(CHAVE_DESTINO, caminho) } catch { /* ok */ }
+}
+
 function Protegida() {
   const { carregando, sessao, mfa } = useAuth()
+  const local = useLocation()
   if (carregando) return <Carregando texto="Abrindo o Central…" />
-  if (!sessao) return <Navigate to="/login" replace />
+  if (!sessao) { guardarDestino(local.pathname); return <Navigate to="/login" replace /> }
   if (mfa !== 'ok') return <Navigate to="/verificacao" replace />
   return <Shell />
 }

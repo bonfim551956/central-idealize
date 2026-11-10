@@ -220,6 +220,14 @@ function SistemaAberto({ sistemas }) {
 
 function Inicio({ nome, sistemas, externos, erro }) {
   const lista = useMemo(() => sistemas, [sistemas])
+  // voltou do login vindo de um sistema: abre direto nele
+  let destino = null
+  try {
+    destino = sessionStorage.getItem('central.destino')
+    // só descarta depois que a lista de sistemas chegou
+    if (destino && (lista.length > 0 || erro)) sessionStorage.removeItem('central.destino')
+  } catch { /* ok */ }
+  if (destino && lista.some((s) => `/s/${s.chave}` === destino)) return <Navigate to={destino} replace />
   if (lista.length === 1 && externos.length === 0 && !erro) return <Navigate to={`/s/${lista[0].chave}`} replace />
   return (
     <div className="h-full overflow-y-auto">
