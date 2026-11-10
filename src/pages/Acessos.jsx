@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Check, ExternalLink, Mail, Plus, Search, ShieldCheck, X } from 'lucide-react'
+import { Check, Mail, Plus, Search, ShieldCheck, X } from 'lucide-react'
 import { supabase, chamarFuncao, mensagemErro } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { Aviso, Botao, Campo, Carregando, cx } from '../ui'
@@ -167,19 +167,88 @@ function Painel({ u, seg, sistemas, aoMudar, aoFechar }) {
       {sistemas.filter((s) => (s.tipo_acesso === 'login' || s.tipo_acesso === 'livre') && s.situacao !== 'oculto').map((s) => (
         <LinhaSistema key={s.chave} u={u} s={s} acesso={u.acessos.find((a) => a.sistema === s.chave)} aoMudar={aoMudar} />
       ))}
-      {rh && (
-        <div className="flex flex-col gap-1 border-t border-linha pt-4">
-          <b>{rh.nome}</b>
-          <span className="text-sm text-apagado">
-            {u.perfis_rh.length ? u.perfis_rh.map((p) => `${p.perfil}${p.loja ? ` · ${p.loja}` : ''}`).join(', ') : 'Sem perfil no RH'}
-          </span>
-          {rh.url && <a href={`${rh.url}/acessos`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-sm font-semibold text-marca-texto hover:underline">Gerir perfis no RH <ExternalLink className="h-3 w-3" aria-hidden /></a>}
-        </div>
-      )}
+      {rh && <AcessoRh u={u} rh={rh} aoMudar={aoMudar} />}
       {u.convite_pendente && u.ativo && (
         <Botao variante="secundario" carregando={reenviando} onClick={reenviar}><Mail className="h-4 w-4" aria-hidden />Reenviar convite</Botao>
       )}
     </aside>
+  )
+}
+
+// Acesso ao Idealize RH: perfil e loja dados aqui no Central (substitui a tela de perfis do RH)
+let opcoesRh = null
+async function carregarOpcoesRh() {
+  if (opcoesRh) return opcoesRh
+  const { data, error } = await supabase.rpc('central_rh_opcoes')
+  if (error) throw error
+  opcoesRh = data
+  return data
+}
+
+function AcessoRh({ u, rh, aoMudar }) {
+  const atual = u.perfis_rh[0] || null
+  const [opcoes, setOpcoes] = useState(null)
+  const [perfil, setPerfil] = useState(atual?.codigo || '')
+  const [loja, setLoja] = useState(atual?.loja_id || '')
+  const [estado, setEstado] = useState(null)
+  const [erro, setErro] = useState(null)
+  useEffect(() => { carregarOpcoesRh().then(setOpcoes).catch((e) => setErro(mensagemErro(e))) }, [])
+  useEffect(() => { setPerfil(atual?.codigo || ''); setLoja(atual?.loja_id || ''); setErro(null) }, [u.id, atual?.codigo, atual?.loja_id])
+
+  const precisaLoja = opcoes?.perfis.find((p) => p.codigo === perfil)?.precisa_loja
+  const mudou = perfil !== (atual?.codigo || '') || (loja || '') !== (atual?.loja_id || '') || u.perfis_rh.length > 1
+  const salvar = async () => {
+    setErro(null)
+    if (!perfil) { setErro('Escolha o perfil no RH.'); return }
+    if (precisaLoja && !loja) { setErro('Gerente de loja precisa de uma loja.'); return }
+    setEstado('salvando')
+    const { error } = await supabase.rpc('central_rh_definir', { p_usuario: u.id, p_perfil: perfil, p_loja: loja || null })
+    setEstado(null)
+    if (error) { setErro(mensagemErro(error)); return }
+    await aoMudar()
+  }
+  const retirar = async () => {
+    if (!window.confirm(`Retirar o acesso de ${u.nome} ao ${rh.nome}?`)) return
+    setErro(null); setEstado('retirando')
+    const { error } = await supabase.rpc('central_rh_retirar', { p_usuario: u.id })
+    setEstado(null)
+    if (error) { setErro(mensagemErro(error)); return }
+    await aoMudar()
+  }
+  const sel = 'h-12 w-full rounded-lg border border-linha bg-superficie px-3 text-base font-normal disabled:opacity-60'
+  return (
+    <div className="flex flex-col gap-2 border-t border-linha pt-4">
+      <div className="flex items-center justify-between gap-2">
+        <b>{rh.nome}</b>
+        {atual && <span className="flex items-center gap-1 text-xs font-semibold text-ok"><Check className="h-3 w-3" aria-hidden />Liberado</span>}
+      </div>
+      {u.perfis_rh.length > 1 && <span className="text-xs text-apagado">Hoje tem {u.perfis_rh.length} perfis: {u.perfis_rh.map((p) => `${p.perfil}${p.loja ? ` · ${p.loja}` : ''}`).join(', ')}. Ao salvar, fica só o escolhido.</span>}
+      {erro && <Aviso>{erro}</Aviso>}
+      {u.eu
+        ? <span className="text-sm text-apagado">{atual ? `${atual.perfil}${atual.loja ? ` · ${atual.loja}` : ''}` : 'Sem perfil no RH'}. O seu próprio perfil só outro gestor altera.</span>
+        : !opcoes ? (!erro && <span className="text-sm text-apagado">Carregando perfis…</span>) : (
+          <>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="flex flex-col gap-1 text-sm font-semibold">Perfil no RH
+                <select className={sel} value={perfil} onChange={(e) => setPerfil(e.target.value)}>
+                  <option value="">Sem acesso</option>
+                  {opcoes.perfis.map((p) => <option key={p.codigo} value={p.codigo}>{p.nome}</option>)}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 text-sm font-semibold">Loja
+                <select className={sel} value={loja} onChange={(e) => setLoja(e.target.value)} disabled={!perfil}>
+                  <option value="">{precisaLoja ? 'Escolha a loja' : 'Todas as lojas'}</option>
+                  {opcoes.lojas.map((l) => <option key={l.id} value={l.id}>{l.nome}</option>)}
+                </select>
+              </label>
+            </div>
+            <div className="flex gap-2">
+              <Botao className="flex-1" carregando={estado === 'salvando'} disabled={!perfil || !mudou} onClick={salvar}>{atual ? 'Salvar perfil' : 'Liberar RH'}</Botao>
+              {atual && <Botao variante="perigo" carregando={estado === 'retirando'} onClick={retirar}>Retirar</Botao>}
+            </div>
+          </>
+        )}
+    </div>
   )
 }
 

@@ -55,7 +55,7 @@ export function Login() {
       <form onSubmit={entrar} className="flex flex-col gap-6" noValidate>
         <div>
           <h2 className="text-3xl font-bold">Entrar</h2>
-          <p className="mt-1 text-sm text-apagado">Use o e-mail cadastrado pelo RH.</p>
+          <p className="mt-1 text-sm text-apagado">Use o e-mail cadastrado pela diretoria no Central.</p>
         </div>
         {aviso && !erro && <Aviso tipo="info">{aviso}</Aviso>}
         {erro && <Aviso>{erro}</Aviso>}
