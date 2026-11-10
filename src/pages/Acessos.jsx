@@ -85,7 +85,7 @@ export function Acessos() {
                 </tbody>
               </table>
             </div>
-            {sel ? <Painel u={sel} seg={seg[sel.id]} sistemas={dados.sistemas} aoMudar={carregar} aoFechar={() => setSelId(null)} />
+            {sel ? <Painel u={sel} seg={seg[sel.id]} sistemas={dados.sistemas} todos={dados.usuarios} aoMudar={carregar} aoFechar={() => setSelId(null)} />
               : <div className="rounded-xl border border-dashed border-linha p-6 text-sm text-apagado">Escolha uma pessoa para liberar ou retirar sistemas.</div>}
           </div>
         </>
@@ -142,7 +142,7 @@ function Situacao({ u }) {
   return <span className="font-semibold text-ok">Ativo</span>
 }
 
-function Painel({ u, seg, sistemas, aoMudar, aoFechar }) {
+function Painel({ u, seg, sistemas, todos, aoMudar, aoFechar }) {
   const [msg, setMsg] = useState(null)
   const [reenviando, setReenviando] = useState(false)
   const rh = sistemas.find((s) => s.tipo_acesso === 'rh')
@@ -164,8 +164,10 @@ function Painel({ u, seg, sistemas, aoMudar, aoFechar }) {
       {msg && <Aviso tipo={msg.tipo}>{msg.texto}</Aviso>}
       {seg && <DoisFatores u={u} seg={seg} aoMudar={aoMudar} />}
       {(!u.ativo || !u.liberado) && <Aviso>Esta pessoa está bloqueada (desativada ou desligada no RH) e não entra em nenhum sistema.</Aviso>}
-      {sistemas.filter((s) => (s.tipo_acesso === 'login' || s.tipo_acesso === 'livre') && s.situacao !== 'oculto').map((s) => (
-        <LinhaSistema key={s.chave} u={u} s={s} acesso={u.acessos.find((a) => a.sistema === s.chave)} aoMudar={aoMudar} />
+      {sistemas.filter((s) => ['login', 'livre', 'central'].includes(s.tipo_acesso) && s.situacao !== 'oculto').map((s) => (
+        s.chave === 'pdv'
+          ? <LinhaPdv key={s.chave} u={u} s={s} todos={todos} acesso={u.acessos.find((a) => a.sistema === s.chave)} aoMudar={aoMudar} />
+          : <LinhaSistema key={s.chave} u={u} s={s} acesso={u.acessos.find((a) => a.sistema === s.chave)} aoMudar={aoMudar} />
       ))}
       {rh && <AcessoRh u={u} rh={rh} aoMudar={aoMudar} />}
       {u.convite_pendente && u.ativo && (
@@ -252,6 +254,111 @@ function AcessoRh({ u, rh, aoMudar }) {
   )
 }
 
+// PDV: o Central cria o usuário do PDV (perfil + loja) ou liga a um que já existe, sem digitar login
+const PDV_FUNCAO = 'https://gnqokiwxbamiegjrfacv.supabase.co/functions/v1/central-pdv'
+const PDV_CHAVE_PUBLICA = 'sb_publishable_9I3k0IvDe5aK47E3VDvuZw_XLWeckJx' // chave pública do PDV (não dá acesso a nada sozinha)
+const CARGOS_PDV = { comercial: 'Comercial', administrativo: 'Administrativo', gerente: 'Gerente', supervisao: 'Supervisão', diretor: 'Diretor' }
+let pdvCache = null
+async function chamarPdv(corpo) {
+  const { data } = await supabase.auth.getSession()
+  const token = data.session?.access_token
+  if (!token) throw new Error('Sessão expirada. Entre novamente.')
+  const r = await fetch(PDV_FUNCAO, { method: 'POST', headers: { Authorization: `Bearer ${token}`, apikey: PDV_CHAVE_PUBLICA, 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) })
+  let dados = null
+  try { dados = await r.json() } catch { /* sem corpo */ }
+  if (!r.ok) throw new Error(dados?.erro || `Erro ${r.status}`)
+  return dados
+}
+const normalizar = (t) => (t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().split(/\s+/).filter((p) => p.length > 1)
+// o nome do PDV cabe dentro do nome do Central (ex.: "Rafael Forte" ⊂ "RAFAEL FORTE E SILVA")
+const mesmoNome = (pdv, central) => { const a = normalizar(pdv); const b = normalizar(central); return a.length >= 2 && a.every((p) => b.includes(p)) }
+
+function LinhaPdv({ u, s, todos, acesso, aoMudar }) {
+  const [pdv, setPdv] = useState(pdvCache)
+  const [escolha, setEscolha] = useState('') // '' = criar novo; senão, o login existente
+  const [cargo, setCargo] = useState('comercial')
+  const [loja, setLoja] = useState('')
+  const [estado, setEstado] = useState(null)
+  const [erro, setErro] = useState(null)
+
+  const carregarPdv = useCallback(async (forcar) => {
+    if (pdvCache && !forcar) { setPdv(pdvCache); return }
+    try { pdvCache = await chamarPdv({ acao: 'listar' }); setPdv(pdvCache) } catch (e) { setErro(mensagemErro(e)) }
+  }, [])
+  useEffect(() => { if (!acesso) carregarPdv(false) }, [acesso, carregarPdv])
+
+  // logins do PDV ainda livres (ativos e não ligados a ninguém no Central)
+  const usados = new Set((todos || []).flatMap((p) => p.acessos.filter((a) => a.sistema === 'pdv' && a.conta).map((a) => a.conta.toUpperCase())))
+  const livres = (pdv?.usuarios || []).filter((c) => c.ativo && !usados.has(c.usuario.toUpperCase()))
+  const sugestao = livres.find((c) => mesmoNome(c.nome, u.nome))
+  useEffect(() => { setEscolha(sugestao?.usuario || ''); setErro(null) }, [u.id, sugestao?.usuario])
+  useEffect(() => { if (!loja && pdv?.lojas?.length) setLoja(pdv.lojas[0].id) }, [pdv, loja])
+
+  const liberar = async () => {
+    setErro(null); setEstado('salvando')
+    try {
+      let conta = escolha
+      if (!conta) {
+        if (!loja) throw new Error('Escolha a loja.')
+        conta = (await chamarPdv({ acao: 'criar', usuario_id: u.id, cargo, loja_id: loja })).usuario
+        pdvCache = null
+      }
+      const { error } = await supabase.rpc('central_conceder', { p_usuario: u.id, p_sistema: 'pdv', p_conta: conta })
+      if (error) throw error
+      await aoMudar()
+    } catch (e) { setErro(mensagemErro(e)) }
+    setEstado(null)
+  }
+  const retirar = async () => {
+    setErro(null); setEstado('retirando')
+    const { error } = await supabase.rpc('central_revogar', { p_usuario: u.id, p_sistema: 'pdv', p_motivo: null })
+    setEstado(null)
+    if (error) { setErro(mensagemErro(error)); return }
+    await aoMudar()
+  }
+  const sel = 'h-12 w-full rounded-lg border border-linha bg-superficie px-3 text-base font-normal'
+  return (
+    <div className="flex flex-col gap-2 border-t border-linha pt-4">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <b>{s.nome}</b>
+          <span className="block text-xs text-apagado">{acesso ? `Usuário no PDV: ${acesso.conta?.toLowerCase()}` : 'O usuário do PDV é criado pelo Central. Só escolha o perfil e a loja.'}</span>
+        </div>
+        {acesso && <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-ok"><Check className="h-3 w-3" aria-hidden />Liberado</span>}
+      </div>
+      {erro && <Aviso>{erro}</Aviso>}
+      {acesso ? <Botao variante="perigo" carregando={estado === 'retirando'} onClick={retirar}>Retirar</Botao>
+        : !pdv ? (!erro && <span className="text-sm text-apagado">Carregando o PDV…</span>) : (
+          <>
+            {livres.length > 0 && (
+              <label className="flex flex-col gap-1 text-sm font-semibold">Usuário no PDV
+                <select className={sel} value={escolha} onChange={(e) => setEscolha(e.target.value)}>
+                  <option value="">Criar um usuário novo</option>
+                  {livres.map((c) => <option key={c.id} value={c.usuario}>Usar o que já existe: {c.nome} ({c.usuario})</option>)}
+                </select>
+              </label>
+            )}
+            {!escolha && (
+              <div className="grid grid-cols-2 gap-2">
+                <label className="flex flex-col gap-1 text-sm font-semibold">Perfil no PDV
+                  <select className={sel} value={cargo} onChange={(e) => setCargo(e.target.value)}>
+                    {(pdv.cargos || Object.keys(CARGOS_PDV)).map((k) => <option key={k} value={k}>{CARGOS_PDV[k] || k}</option>)}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1 text-sm font-semibold">Loja
+                  <select className={sel} value={loja} onChange={(e) => setLoja(e.target.value)}>
+                    {pdv.lojas.map((l) => <option key={l.id} value={l.id}>{l.nome.replace(/^Óticas Idealize\s*/i, '')}</option>)}
+                  </select>
+                </label>
+              </div>
+            )}
+            <Botao carregando={estado === 'salvando'} onClick={liberar}><Plus className="h-4 w-4" aria-hidden />Liberar acesso</Botao>
+          </>
+        )}
+    </div>
+  )
+}
+
 function LinhaSistema({ u, s, acesso, aoMudar }) {
   const [conta, setConta] = useState(acesso?.conta || '')
   const [estado, setEstado] = useState(null)
@@ -273,6 +380,24 @@ function LinhaSistema({ u, s, acesso, aoMudar }) {
     await aoMudar()
   }
   const mudou = (conta.trim().toUpperCase() !== (acesso?.conta || '').toUpperCase())
+  if (s.tipo_acesso === 'central') {
+    return (
+      <div className="flex flex-col gap-2 border-t border-linha pt-4">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <b>{s.nome}</b>
+            <span className="block text-xs text-apagado">{s.chave === 'automacoes' ? 'O cadastro no painel é criado sozinho no 1º acesso.' : 'Entra direto com o login do Central.'}</span>
+          </div>
+          {s.situacao === 'em_breve' && <span className="rounded-md bg-fundo px-2 py-0.5 text-xs font-semibold text-apagado">Em breve</span>}
+          {acesso && <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-ok"><Check className="h-3 w-3" aria-hidden />Liberado</span>}
+        </div>
+        {erro && <Aviso>{erro}</Aviso>}
+        {acesso
+          ? <Botao variante="perigo" carregando={estado === 'retirando'} onClick={retirar}>Retirar</Botao>
+          : <Botao carregando={estado === 'salvando'} onClick={salvar}><Plus className="h-4 w-4" aria-hidden />Liberar acesso</Botao>}
+      </div>
+    )
+  }
   if (s.tipo_acesso === 'livre') {
     return (
       <div className="flex flex-col gap-2 border-t border-linha pt-4">
