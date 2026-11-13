@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Check, Mail, Plus, Search, ShieldCheck, X } from 'lucide-react'
+import { Check, KeyRound, Mail, Plus, RefreshCw, Search, ShieldCheck, X } from 'lucide-react'
 import { supabase, chamarFuncao, mensagemErro } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { Aviso, Botao, Campo, Carregando, cx } from '../ui'
@@ -136,6 +136,29 @@ function DoisFatores({ u, seg, aoMudar }) {
   )
 }
 
+function RedefinirSenha({ u, aoMudar }) {
+  const [salvando, setSalvando] = useState(false)
+  const [msg, setMsg] = useState(null)
+  const primeiro = (u.nome || '').split(' ')[0]
+  const redefinir = async () => {
+    if (!window.confirm(`Redefinir a senha de ${primeiro}?\n\nA senha volta para a inicial (123456). No próximo acesso, a pessoa entra com ela e é obrigada a criar uma nova.`)) return
+    setMsg(null); setSalvando(true)
+    const { error } = await supabase.rpc('central_redefinir_senha', { p_usuario: u.id })
+    setSalvando(false)
+    if (error) { setMsg({ tipo: 'erro', texto: mensagemErro(error) }); return }
+    setMsg({ tipo: 'ok', texto: 'Senha redefinida. Passe a senha inicial (123456) para a pessoa.' })
+    await aoMudar()
+  }
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-linha bg-fundo p-4">
+      <span className="flex items-center gap-2 font-bold"><KeyRound className="h-4 w-4 text-marca-texto" aria-hidden />Senha</span>
+      {msg && <Aviso tipo={msg.tipo}>{msg.texto}</Aviso>}
+      <span className="text-sm text-apagado">Esqueceu a senha? Volte para a senha inicial e a pessoa cria uma nova ao entrar.</span>
+      <Botao variante="secundario" className="w-fit" carregando={salvando} onClick={redefinir}><RefreshCw className="h-4 w-4" aria-hidden />Redefinir senha</Botao>
+    </div>
+  )
+}
+
 function Situacao({ u }) {
   if (!u.ativo || !u.liberado) return <span className="font-semibold text-perigo">Bloqueado</span>
   if (u.trocar_senha) return <span className="font-semibold text-aviso">Senha inicial (troca no 1º acesso)</span>
@@ -164,6 +187,7 @@ function Painel({ u, seg, sistemas, todos, aoMudar, aoFechar }) {
       </div>
       {msg && <Aviso tipo={msg.tipo}>{msg.texto}</Aviso>}
       {seg && <DoisFatores u={u} seg={seg} aoMudar={aoMudar} />}
+      {!u.eu && !u.convite_pendente && <RedefinirSenha u={u} aoMudar={aoMudar} />}
       {(!u.ativo || !u.liberado) && <Aviso>Esta pessoa está bloqueada (desativada ou desligada no RH) e não entra em nenhum sistema.</Aviso>}
       {sistemas.filter((s) => ['login', 'livre', 'central'].includes(s.tipo_acesso) && s.situacao !== 'oculto').map((s) => (
         s.chave === 'pdv'
