@@ -2,14 +2,17 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, NavLink, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom'
 import {
   BarChart3, CalendarDays, ChevronsLeft, ChevronsRight, ExternalLink, KeyRound, LayoutGrid, LogOut, Menu,
-  ShoppingCart, Star, Target, Trophy, Users, X, Sun, Moon,
+  Package, ShoppingCart, Star, Target, Trophy, Users, X, Sun, Moon,
 } from 'lucide-react'
 import { useAuth, aoSair } from './lib/auth'
 import { Acessos } from './pages/Acessos'
+import { ConsultaPedidos } from './pages/ConsultaPedidos'
 import { cx } from './ui'
 import { lerTema, aplicarTema } from './lib/tema'
 
-const ICONES = { carrinho: ShoppingCart, grafico: BarChart3, pessoas: Users, alvo: Target, calendario: CalendarDays, trofeu: Trophy, estrela: Star, app: LayoutGrid }
+const ICONES = { pacote: Package, carrinho: ShoppingCart, grafico: BarChart3, pessoas: Users, alvo: Target, calendario: CalendarDays, trofeu: Trophy, estrela: Star, app: LayoutGrid }
+// Sistemas que são telas do próprio Central (sem quadro de outro site)
+const INTERNOS = { consulta_pedidos: ConsultaPedidos }
 const origemDe = (url) => { try { return new URL(url).origin } catch { return null } }
 const iniciais = (n) => (n || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join('').toUpperCase()
 const primeiroNome = (n) => { const p = (n || '').split(/\s+/)[0] || ''; return p.charAt(0) + p.slice(1).toLowerCase() }
@@ -145,7 +148,7 @@ export function Shell() {
           <button type="button" onClick={() => setGaveta(false)} aria-label="Fechar menu" className="grid h-11 w-11 place-items-center rounded-lg hover:bg-lat-hover md:hidden"><X className="h-6 w-6" /></button>
         </div>
         {menu}
-        {sistemaAtual && (!recolhido || gaveta) && (
+        {sistemaAtual && !INTERNOS[sistemaAtual.chave] && (!recolhido || gaveta) && (
           <a href={sistemaAtual.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 text-sm text-lat-icone hover:text-lat-forte">
             <ExternalLink className="h-4 w-4" aria-hidden /> Abrir {sistemaAtual.nome} em nova aba
           </a>
@@ -168,6 +171,14 @@ export function Shell() {
         {abertos.map((chave) => {
           const s = abriveis.find((x) => x.chave === chave)
           if (!s) return null
+          const Interno = INTERNOS[chave]
+          if (Interno) {
+            return (
+              <div key={chave} className={cx('absolute inset-0 overflow-y-auto bg-fundo', chave === atual ? 'visible' : 'invisible')}>
+                <Interno />
+              </div>
+            )
+          }
           return (
             <iframe key={chave} ref={(el) => { quadros.current[chave] = el }} src={s.url} title={s.nome}
               allow="camera; clipboard-read; clipboard-write; fullscreen"
